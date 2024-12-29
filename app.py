@@ -4,6 +4,7 @@ import hashlib
 import datetime
 import os
 import logging
+import re
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
@@ -18,6 +19,20 @@ log_handler = RotatingFileHandler(os.path.join(logs_dir, 'server.log'), maxBytes
 log_handler.setFormatter(log_formatter)
 log_handler.setLevel(logging.DEBUG)  # Set logging level to DEBUG
 app.logger.addHandler(log_handler)
+
+
+# input validation functions
+def validate_name(name):
+    return bool(re.match(r'^[A-Za-z\s]{1,50}$', name))
+
+def validate_email(email):
+    return bool(re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email))
+
+def validate_role(role):
+    return role in ['Admin', 'Driver', 'Passenger']  # Replace with actual roles
+
+def validate_password(password):
+    return len(password) >= 8 and any(char.isdigit() for char in password) and any(char.isalpha() for char in password)
 
 # Function to calculate MD5 hash
 def calculate_md5(text):
@@ -70,6 +85,7 @@ def register_user(first_name, last_name, email, password, role):
         cursor = connection.cursor()
 
         # Check if email and role combination already exists
+        # Use parameterized queries to prevent SQL injection
         cursor.execute("SELECT * FROM AccountDB WHERE Email=? AND Type=?", (email, role))
         existing_user = cursor.fetchone()
         if existing_user:
@@ -111,10 +127,23 @@ def register():
         confirm_password = request.form.get('ConfirmPassword')
         selected_role = request.form.get('selected_role')
 
-        # Validate form data
+        # Validate form data should consister of all fields
         if not (first_name and last_name and email and password and confirm_password and selected_role):
             return "All fields are required", 400
 
+        if not validate_name(first_name) or not validate_name(last_name):
+            return jsonify({'error': 'Invalid name format'}), 400
+
+        if not validate_email(email):
+            return jsonify({'error': 'Invalid email format'}), 400
+
+        if not validate_password(password):
+            return jsonify({'error': 'Password must be at least 8 characters long, contain both letters and numbers'}), 400
+
+        if not validate_role(selected_role):
+            return jsonify({'error': 'Invalid role selected'}), 400
+
+        # both passwords should match
         if password != confirm_password:
             return "Passwords do not match", 400
 
